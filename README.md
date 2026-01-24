@@ -11,7 +11,7 @@
     
     salt -new salvaguarda     | cria novo registro.
     salt -load salvaguarda    | carrega ultima versão do registro.
-    salt -load{n} salvaguarda | carrega versão {n} do registro. ... salt -load2 salvaguarda
+    salt -load{n} salvaguarda | carrega versão {n} do registro.: salt -load2 salvaguarda
     
     salt -exe salvaguarda     | salva também os arquivos .exe.
 
