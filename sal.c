@@ -4,7 +4,7 @@
 #include <openssl/sha.h>
 #include "readwrite.h"
 
-#define DEST "D:\\sv"
+#define DEST "D:\\testes"
 
 static int ignore_exes = 1;
 static char dotexe[] = ".exe"; 
@@ -12,6 +12,7 @@ static char dotexe[] = ".exe";
 #define M_NEW 0x01
 #define M_LOAD 0x02
 #define M_EXE 0x04
+
 
 int endsWith(char* a, char* b){
     size_t la = strlen(a);
@@ -46,32 +47,6 @@ int getFileHash(FILE* f, char hash[41]){
     return 0;
 }
 
-void dirCopy(char* orig, char* dest){
-    WIN32_FIND_DATA fd;
-    char fontePath[MAX_PATH];
-    char destPath[MAX_PATH];
-    CreateDirectory(dest, NULL);
-
-    sprintf(fontePath, "%s\\*", orig);
-    HANDLE hFind = FindFirstFile(fontePath, &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return;
-
-    do {
-        if (strcmp(fd.cFileName, ".") && strcmp(fd.cFileName, "..")){
-            sprintf(fontePath, "%s\\%s", orig, fd.cFileName);
-            sprintf(destPath, "%s\\%s", dest, fd.cFileName);
-
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                dirCopy(fontePath, destPath);
-            } 
-            else{
-                CopyFile(fontePath, destPath, FALSE);
-            }
-        }
-    } while(FindNextFile(hFind, &fd));
-
-    FindClose(hFind);
-}
 
 
 int createCheckDir(char* dest){
@@ -93,8 +68,8 @@ void criarDirRegistro(char* path){
     }
     char contentPath[MAX_PATH];
     char buildPath[MAX_PATH];
-    sprintf(contentPath, "%s\\conteudo", path);
-    sprintf(buildPath, "%s\\build", path);
+    snprintf(contentPath, MAX_PATH, "%s\\conteudo", path);
+    snprintf(buildPath, MAX_PATH, "%s\\build", path);
 
     if(!CreateDirectory(contentPath, NULL)){
         printf("erro");
@@ -105,7 +80,7 @@ void criarDirRegistro(char* path){
         return;
     }
 
-    sprintf(buildPath, "%s\\build\\salver", path);
+    snprintf(buildPath, MAX_PATH,"%s\\build\\salver", path);
 
     FILE* f = fopen(buildPath, "w");
     if (!f){
@@ -121,44 +96,62 @@ void criarDirRegistro(char* path){
 }
 
 
-void hashCopyBuild(char* orig, char* dest, char* conteudo){
+
+
+void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
     WIN32_FIND_DATA fd;
     char fonte_path[MAX_PATH];
     char dest_path[MAX_PATH];
     CreateDirectory(dest, NULL);
 
-    sprintf(fonte_path, "%s\\*", orig);
+    snprintf(fonte_path, MAX_PATH, "%s\\*", orig);
     HANDLE hFind = FindFirstFile(fonte_path, &fd);
     if (hFind == INVALID_HANDLE_VALUE) return;
 
     do {
         if (strcmp(fd.cFileName, ".") && strcmp(fd.cFileName, "..")){
-            sprintf(fonte_path, "%s\\%s", orig, fd.cFileName);
-            sprintf(dest_path, "%s\\%s", dest, fd.cFileName);
+            snprintf(fonte_path, MAX_PATH, "%s\\%s", orig, fd.cFileName);
+            snprintf(dest_path, MAX_PATH, "%s\\%s", dest, fd.cFileName);
 
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                hashCopyBuild(fonte_path, dest_path, conteudo);
+                hashCLBuild(fonte_path, dest_path, conteudo, copy);
             }
-            else if (!(ignore_exes && endsWith(fd.cFileName, dotexe))){
-                FILE* f = fopen(fonte_path, "rb");
-                char hash[41];
-                getFileHash(f, hash);
-                fclose(f);
+            else if (copy){
+                if (!(ignore_exes && endsWith(fd.cFileName, dotexe))){
+                    FILE* f = fopen(fonte_path, "rb");
+                    char hash[41];
+                    getFileHash(f, hash);
+                    fclose(f);
 
-                char file_path[MAX_PATH];
-                sprintf(file_path, "%s\\%s",conteudo, hash);
+                    char file_path[MAX_PATH];
+                    snprintf(file_path, MAX_PATH, "%s\\%s",conteudo, hash);
 
-                DWORD at = GetFileAttributesA(file_path);
-                if(!(at != INVALID_FILE_ATTRIBUTES && !(at & FILE_ATTRIBUTE_DIRECTORY))){
+                    DWORD at = GetFileAttributesA(file_path);
+                    if(!(at != INVALID_FILE_ATTRIBUTES && !(at & FILE_ATTRIBUTE_DIRECTORY))){
 
-                    CopyFile(fonte_path, file_path, FALSE);
-                    printf("\ncopiado: %s -> %s", fonte_path, file_path);
+                        CopyFile(fonte_path, file_path, FALSE);
+                        printf("\ncopiado: %s -> %s", fonte_path, file_path);
+                    }
+
+                    f = fopen(dest_path, "wb");
+                    writeFile(f, hash);
+                    fclose(f);
                 }
-
-                f = fopen(dest_path, "wb");
-                writeFile(f, hash);
-                fclose(f);
             }
+            else{
+                char* content_hold;
+                size_t size = 0;
+                FILE* f = fopen(fonte_path, "rb");
+                readFile(f, &size, &content_hold);
+                fclose(f);
+
+                char file_content_path[MAX_PATH];
+                snprintf(file_content_path, MAX_PATH, "%s\\%s", conteudo, content_hold);
+                free(content_hold);
+
+                CopyFile(file_content_path, dest_path, FALSE);
+            }
+
         }
     } while(FindNextFile(hFind, &fd));
 
@@ -170,9 +163,9 @@ int newBuild(char* orig, char* dest){
     char conteudoPath[MAX_PATH];
     char salverPath[MAX_PATH];
     char newVerPath[MAX_PATH];
-    sprintf(buildPath, "%s\\build", dest);
-    sprintf(conteudoPath, "%s\\conteudo", dest);
-    sprintf(salverPath, "%s\\salver", buildPath);
+    snprintf(buildPath, MAX_PATH, "%s\\build", dest);
+    snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
+    snprintf(salverPath, MAX_PATH, "%s\\salver", buildPath);
 
     char* content;
     size_t sz = 0;
@@ -182,7 +175,7 @@ int newBuild(char* orig, char* dest){
     fclose(salf);
     int current_ver = atoi(content);
 
-    sprintf(newVerPath, "%s\\%d", buildPath, current_ver+1);
+    snprintf(newVerPath, MAX_PATH, "%s\\%d", buildPath, current_ver+1);
     if(createCheckDir(newVerPath) != 0){
         printf("deu erro salvando.");
         return -1;
@@ -191,62 +184,24 @@ int newBuild(char* orig, char* dest){
     printf("%s",newVerPath);
 
     char new_ver[30];
-    sprintf(new_ver, "%d", current_ver+1);
+    snprintf(new_ver, (size_t)30, "%d", current_ver+1);
 
     salf = fopen(salverPath, "wb");
     writeFile(salf, new_ver);
     fclose(salf);
 
-    hashCopyBuild(orig, newVerPath, conteudoPath);
-
+    hashCLBuild(orig, newVerPath, conteudoPath, 1);
+    
     return 0;
-}
-
-
-void hashLoadBuild(char* orig, char* dest, char* conteudo){
-    WIN32_FIND_DATA fd;
-    char fonte_path[MAX_PATH];
-    char dest_path[MAX_PATH];
-    CreateDirectory(dest, NULL);
-
-    sprintf(fonte_path, "%s\\*", orig);
-    HANDLE hFind = FindFirstFile(fonte_path, &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return;
-
-    do {
-        if (strcmp(fd.cFileName, ".") && strcmp(fd.cFileName, "..")){
-            sprintf(fonte_path, "%s\\%s", orig, fd.cFileName);
-            sprintf(dest_path, "%s\\%s", dest, fd.cFileName);
-
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                hashLoadBuild(fonte_path, dest_path, conteudo);
-            } 
-            else{
-                char* content_hold;
-                size_t size = 0;
-                FILE* f = fopen(fonte_path, "rb");
-                readFile(f, &size, &content_hold);
-                fclose(f);
-
-                char file_content_path[MAX_PATH];
-                sprintf(file_content_path, "%s\\%s", conteudo, content_hold);
-                free(content_hold);
-
-                CopyFile(file_content_path, dest_path, FALSE);
-            }
-        }
-    } while(FindNextFile(hFind, &fd));
-
-    FindClose(hFind);
 }
 
 int loadBuild(char* orig, char* dest, int ver){
     char salver_path[MAX_PATH];
-    sprintf(salver_path, "%s\\build\\salver", orig);
+    snprintf(salver_path, MAX_PATH, "%s\\build\\salver", orig);
 
     char build_path[MAX_PATH];
     if (ver >= 0){
-        sprintf(build_path, "%s\\build\\%d", orig, ver);
+        snprintf(build_path, MAX_PATH, "%s\\build\\%d", orig, ver);
     }
     else{
         char* content;
@@ -254,15 +209,15 @@ int loadBuild(char* orig, char* dest, int ver){
         FILE* f = fopen(salver_path, "rb");
         readFile(f, &size, &content);
         fclose(f);
-        sprintf(build_path, "%s\\build\\%s", orig, content);
+        snprintf(build_path, MAX_PATH, "%s\\build\\%s", orig, content);
         free(content);
     }
 
     char conteudo_path[MAX_PATH];
-    sprintf(conteudo_path, "%s\\conteudo", orig);
+    snprintf(conteudo_path, MAX_PATH, "%s\\conteudo", orig);
 
     if (GetFileAttributesA(build_path) != INVALID_FILE_ATTRIBUTES) {
-        hashLoadBuild(build_path, dest, conteudo_path);
+        hashCLBuild(build_path, dest, conteudo_path, 0);
         return 0;
     }
     printf("Build nao existe.");
@@ -270,11 +225,12 @@ int loadBuild(char* orig, char* dest, int ver){
 }
 
 
+
 void listRegistros(){
     WIN32_FIND_DATA fd;
 
     char dirReg[MAX_PATH];
-    sprintf(dirReg, "%s\\*", DEST);
+    snprintf(dirReg, MAX_PATH, "%s\\*", DEST);
 
     HANDLE hFind = FindFirstFile(dirReg, &fd);
     if (hFind == INVALID_HANDLE_VALUE) return;
@@ -285,7 +241,7 @@ void listRegistros(){
                 printf("Registro %s -> ", fd.cFileName);
 
                 char dirSalver[MAX_PATH];
-                sprintf(dirSalver, "%s\\%s\\build\\salver", DEST, fd.cFileName);
+                snprintf(dirSalver, MAX_PATH, "%s\\%s\\build\\salver", DEST, fd.cFileName);
 
                 char* content;
                 size_t size = 0;
@@ -303,6 +259,7 @@ void listRegistros(){
 }
 
 
+
 int main(int argc, char** argv){
     SetConsoleOutputCP(CP_UTF8);
     createCheckDir(DEST);
@@ -315,7 +272,7 @@ int main(int argc, char** argv){
     char ppath[MAX_PATH];
     GetCurrentDirectoryA(MAX_PATH, ppath);
     char regDir[MAX_PATH] = "";
-    sprintf(regDir, "%s\\%s", DEST, argv[argc-1]);
+    snprintf(regDir, MAX_PATH, "%s\\%s", DEST, argv[argc-1]);
     
     if (argc == 2){
         newBuild(ppath, regDir);
@@ -340,7 +297,7 @@ int main(int argc, char** argv){
             int n = -1;
 
             char verString[15];
-            snprintf(verString, 15, "%s", argv[load_flag_i]+5);
+            snprintf(verString, (size_t)15, "%s", argv[load_flag_i]+5);
             if (verString[0] != '\0') n = atoi(verString);
 
             loadBuild(regDir, ppath, n);
