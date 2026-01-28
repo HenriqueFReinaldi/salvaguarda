@@ -1,0 +1,3 @@
+gcc sal.c readwrite.c -o sal -lssl -lcrypto
+echo pronto.
+.\sal

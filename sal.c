@@ -4,7 +4,13 @@
 #include <openssl/sha.h>
 #include "readwrite.h"
 
-#define DEST "D:\\testes"
+#define BLUE    "\x1b[34m"
+#define PURPLE  "\x1b[35m"
+#define ORANGE  "\x1b[38;5;208m"
+#define RESET   "\x1b[0m"
+
+#define DEST "D:\\sv"
+#define VER "28.01.2026.1"
 
 static int ignore_exes = 1;
 static char dotexe[] = ".exe"; 
@@ -58,7 +64,7 @@ int createCheckDir(char* dest){
 
 void criarDirRegistro(char* path){
     if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES) {
-        printf("Reg ja existe.");
+        printf("Registro ja existe.");
         return;
     }
 
@@ -130,7 +136,7 @@ void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
                     if(!(at != INVALID_FILE_ATTRIBUTES && !(at & FILE_ATTRIBUTE_DIRECTORY))){
 
                         CopyFile(fonte_path, file_path, FALSE);
-                        printf("\ncopiado: %s -> %s", fonte_path, file_path);
+                        printf("\nCopiado: %s -> %s", fonte_path, file_path);
                     }
 
                     f = fopen(dest_path, "wb");
@@ -177,11 +183,11 @@ int newBuild(char* orig, char* dest){
 
     snprintf(newVerPath, MAX_PATH, "%s\\%d", buildPath, current_ver+1);
     if(createCheckDir(newVerPath) != 0){
-        printf("deu erro salvando.");
+        printf("Registro não existe.");
         return -1;
     }
 
-    printf("%s",newVerPath);
+    printf("Nova build: %s",newVerPath);
 
     char new_ver[30];
     snprintf(new_ver, (size_t)30, "%d", current_ver+1);
@@ -238,7 +244,7 @@ void listRegistros(){
     do {
         if (strcmp(fd.cFileName, ".") && strcmp(fd.cFileName, "..")){
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                printf("Registro %s -> ", fd.cFileName);
+                printf("Registro "BLUE "%s" RESET " -> ", fd.cFileName);
 
                 char dirSalver[MAX_PATH];
                 snprintf(dirSalver, MAX_PATH, "%s\\%s\\build\\salver", DEST, fd.cFileName);
@@ -265,7 +271,10 @@ int main(int argc, char** argv){
     createCheckDir(DEST);
 
     if (argc == 1){
+        printf(BLUE "salvaguarda " RESET "versão " BLUE "%s\n\n" RESET, VER);
+
         listRegistros();
+        printf("\n");
         return 0;
     }
     
