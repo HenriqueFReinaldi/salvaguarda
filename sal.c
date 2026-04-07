@@ -1,60 +1,22 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <windows.h>
-#include <openssl/sha.h>
-#include "readwrite.h"
-
-#define BLUE    "\x1b[34m"
-#define PURPLE  "\x1b[35m"
-#define ORANGE  "\x1b[38;5;208m"
-#define RESET   "\x1b[0m"
-
-#define DEST "D:\\sv"
-#define VER "28.01.2026.1"
-
-static int ignore_exes = 1;
-static char dotexe[] = ".exe"; 
-
-#define M_NEW 0x01
-#define M_LOAD 0x02
-#define M_EXE 0x04
+#include "util.h"
 
 
-int endsWith(char* a, char* b){
-    size_t la = strlen(a);
-    size_t lb = strlen(b);
+//configurationes
+char DEST[MAX_PATH];
+char REGISTRO_LASTARG[MAX_PATH];
+Set ignore_file_types = {100, 0, NULL};
+Set ignore_folders = {100, 0, NULL};
 
-    if (lb > la) return 0;
+//---
 
-    return memcmp(a+(la-lb), b, lb) == 0;
-}
+#define M_NEW 0x01 //
+#define M_LOAD 0x02 //carregar porraloca
+#define M_EXE 0x04 //incluir .exes ao salvar
+#define M_SPC 0x08 //criar build especial
+#define M_VIEW 0x10 //visualizar builds do regis
+#define M_CPYMSG 0x20 // mostrar mensagems de copiar
 
-int startsWith(char* a, char* b){
-    size_t la = strlen(a);
-    size_t lb = strlen(b);
-
-    if (lb > la) return 0;
-
-    return memcmp(a, b, lb) == 0;
-}
-
-int getFileHash(FILE* f, char hash[41]){
-    size_t size;
-    char* content;
-    readFile(f, &size, &content);
-
-    unsigned char out[SHA_DIGEST_LENGTH]; 
-    SHA1((unsigned char*)content, size, out);
-
-    for(int i = 0; i < SHA_DIGEST_LENGTH; i++) {
-        sprintf(hash+i*2, "%02x", out[i]);
-    }
-    free(content);
-    return 0;
-}
-
-
-
+//dirs
 int createCheckDir(char* dest){
     if (!(CreateDirectory(dest, NULL) || GetLastError() == ERROR_ALREADY_EXISTS)){
         return -1;
@@ -102,6 +64,29 @@ void criarDirRegistro(char* path){
 }
 
 
+//builds
+int ignore_exes = 1;
+int copy_messages = 0;
+
+int file_count;
+int files_done = 0;
+int files_ignored = 0;
+int new_files = 0;
+
+int getFileHash(FILE* f, char hash[41]){
+    static size_t size = 0;
+    static char* content;
+
+    staticGrowReadFile(f, &size, &content);
+
+    unsigned char out[SHA_DIGEST_LENGTH]; 
+    SHA1((unsigned char*)content, size, out);
+
+    for(int i = 0; i < SHA_DIGEST_LENGTH; i++) {
+        sprintf(hash+i*2, "%02x", out[i]);
+    }
+    return 0;
+}
 
 
 void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
@@ -120,10 +105,20 @@ void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
             snprintf(dest_path, MAX_PATH, "%s\\%s", dest, fd.cFileName);
 
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                hashCLBuild(fonte_path, dest_path, conteudo, copy);
+                if (!contains(ignore_folders, fd.cFileName)) hashCLBuild(fonte_path, dest_path, conteudo, copy);
+                else{
+                    int ignored = fileTravel(fonte_path, 1, 0, 0);
+                    files_ignored += ignored;
+                    files_done += ignored;
+                }
             }
             else if (copy){
-                if (!(ignore_exes && endsWith(fd.cFileName, dotexe))){
+                int can_copy = 1;
+
+                char* ext_dot = strrchr(fd.cFileName, '.');
+                if (ext_dot != NULL && contains(ignore_file_types, ext_dot)) can_copy = 0;
+
+                if (can_copy){
                     FILE* f = fopen(fonte_path, "rb");
                     char hash[41];
                     getFileHash(f, hash);
@@ -134,26 +129,32 @@ void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
 
                     DWORD at = GetFileAttributesA(file_path);
                     if(!(at != INVALID_FILE_ATTRIBUTES && !(at & FILE_ATTRIBUTE_DIRECTORY))){
-
                         CopyFile(fonte_path, file_path, FALSE);
-                        printf("\nCopiado: %s -> %s", fonte_path, file_path);
+                        new_files++;
+                        if (copy_messages) printf("Copiado : %s -> %s\n", fonte_path, file_path);
                     }
 
                     f = fopen(dest_path, "wb");
                     writeFile(f, hash);
                     fclose(f);
                 }
+                else{
+                    if (copy_messages) printf(RED "Ignorado: " RESET "%s\n", fonte_path);
+                    files_ignored++;
+                }
+                files_done++;
+                if (!copy_messages) printf("Progresso:" BLUE " %d\% (%d/%d)\r" RESET, (int)(((float)files_done/file_count)*100),files_done, file_count);
             }
             else{
-                char* content_hold;
-                size_t size = 0;
+                size_t size = 50;
+                char content_name[size];
+                
                 FILE* f = fopen(fonte_path, "rb");
-                readFile(f, &size, &content_hold);
+                noMallocReadFile(f, size, content_name);
                 fclose(f);
 
                 char file_content_path[MAX_PATH];
-                snprintf(file_content_path, MAX_PATH, "%s\\%s", conteudo, content_hold);
-                free(content_hold);
+                snprintf(file_content_path, MAX_PATH, "%s\\%s", conteudo, content_name);
 
                 CopyFile(file_content_path, dest_path, FALSE);
             }
@@ -164,7 +165,19 @@ void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
     FindClose(hFind);
 }
 
+    //create
 int newBuild(char* orig, char* dest){
+    char* last_slash_orig = strrchr(orig, '\\');
+    char orig_folder_name[MAX_PATH];
+    snprintf(orig_folder_name, MAX_PATH, last_slash_orig+1);
+
+    if (strcmp(orig_folder_name, REGISTRO_LASTARG) != 0){
+        char resposta;
+        printf("Mandar '" RED "%s" RESET "' para '" RED "%s" RESET"'? (s/n): ", orig_folder_name, REGISTRO_LASTARG);
+        scanf("%c", &resposta);
+        if (resposta != 's' && resposta != 'S') return 0;
+    }
+
     char buildPath[MAX_PATH];
     char conteudoPath[MAX_PATH];
     char salverPath[MAX_PATH];
@@ -174,10 +187,10 @@ int newBuild(char* orig, char* dest){
     snprintf(salverPath, MAX_PATH, "%s\\salver", buildPath);
 
     char* content;
-    size_t sz = 0;
+    size_t content_size = 0;
 
     FILE* salf = fopen(salverPath, "rb");
-    readFile(salf, &sz, &content);
+    readFile(salf, &content_size, &content);
     fclose(salf);
     int current_ver = atoi(content);
 
@@ -187,27 +200,62 @@ int newBuild(char* orig, char* dest){
         return -1;
     }
 
-    printf("Nova build: %s",newVerPath);
-
     char new_ver[30];
     snprintf(new_ver, (size_t)30, "%d", current_ver+1);
-
+    
     salf = fopen(salverPath, "wb");
     writeFile(salf, new_ver);
     fclose(salf);
-
-    hashCLBuild(orig, newVerPath, conteudoPath, 1);
     
+    file_count = fileTravel(orig, 1, 0, 0);
+    
+    printf("Nova build: %s\n",newVerPath);
+    printf("Arquivos a serem processados: %d\n", file_count);
+    hashCLBuild(orig, newVerPath, conteudoPath, 1);
+    printf("\nArquivos novos: "BLUE "%d\n" RESET, new_files);
+    printf("Arquivos ignorados: "RED "%d\n" RESET, files_ignored);
+
     return 0;
 }
 
-int loadBuild(char* orig, char* dest, int ver){
+int newSpecialBuild(char* orig, char* dest, char* nome){
+    char buildPath[MAX_PATH];
+    char conteudoPath[MAX_PATH];
+    char newVerPath[MAX_PATH];
+
+    snprintf(buildPath, MAX_PATH, "%s\\build", dest);
+    snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
+    snprintf(newVerPath, MAX_PATH, "%s\\%s", buildPath, nome);
+
+    if (GetFileAttributesA(newVerPath) != INVALID_FILE_ATTRIBUTES) {
+        printf("Build ja existe.");
+        return -1;
+    }
+
+    if(createCheckDir(newVerPath) != 0){
+        printf("Registro não existe.");
+        return -1;
+    }
+    
+    file_count = fileTravel(orig, 1, 0, 0);
+
+    printf("Nova build: %s\n",newVerPath);
+    printf("Arquivos a serem processados: %d\n", file_count);
+    hashCLBuild(orig, newVerPath, conteudoPath, 1);
+    printf("\nArquivos novos: "BLUE "%d\n" RESET, new_files);
+    printf("Arquivos ignorados: "RED "%d\n" RESET, files_ignored);
+    return 0;
+}
+
+
+    //load
+int loadBuild(char* orig, char* dest, char* ver){
     char salver_path[MAX_PATH];
     snprintf(salver_path, MAX_PATH, "%s\\build\\salver", orig);
 
     char build_path[MAX_PATH];
-    if (ver >= 0){
-        snprintf(build_path, MAX_PATH, "%s\\build\\%d", orig, ver);
+    if (strlen(ver) != 0){
+        snprintf(build_path, MAX_PATH, "%s\\build\\%s", orig, ver);
     }
     else{
         char* content;
@@ -231,7 +279,7 @@ int loadBuild(char* orig, char* dest, int ver){
 }
 
 
-
+//visualizacao
 void listRegistros(){
     WIN32_FIND_DATA fd;
 
@@ -264,62 +312,146 @@ void listRegistros(){
     FindClose(hFind);
 }
 
+//Prog
+void init(){
+    SetConsoleOutputCP(CP_UTF8);
+    initSet(&ignore_file_types);
+    initSet(&ignore_folders);
 
+    
+    
+
+    char program_path[MAX_PATH]; 
+    GetModuleFileNameA(NULL, program_path, MAX_PATH);
+    *strrchr(program_path, '\\') = '\0';
+
+    char config_path[MAX_PATH];
+    snprintf(config_path, MAX_PATH, "%s\\svconfig.txt", program_path);
+
+    char** svconfig_lines;
+    size_t line_count;
+
+    FILE* f = fopen(config_path, "rb");
+    if (!f) msgExit("Sem arquivo svconfig...");
+
+    getFileLines(f, &svconfig_lines, &line_count);
+    fclose(f);
+    if (line_count > 0){
+        strcpy(DEST, svconfig_lines[0]);
+    }
+    for (size_t i = 1; i < line_count; i++){
+        size_t arg_length = strlen(svconfig_lines[i]);
+        if (arg_length <= 8) continue;
+
+        char* resto = svconfig_lines[i]+8;
+
+        if (startsWith(svconfig_lines[i], "dignore ") == 1){
+            addKey(&ignore_folders, resto);
+        }
+        else if (startsWith(svconfig_lines[i], "tignore ") == 1){
+            addKey(&ignore_file_types, resto);
+        }
+    }
+
+    if (createCheckDir(DEST) != 0) msgExit("Falha em criar / achar diretorio destino (primeira linha svconfig)");
+}
 
 int main(int argc, char** argv){
-    SetConsoleOutputCP(CP_UTF8);
-    createCheckDir(DEST);
+    char proj_path[MAX_PATH];
+    char reg_path[MAX_PATH];
+
+    init();
+    GetCurrentDirectoryA(MAX_PATH, proj_path);
+    snprintf(reg_path, MAX_PATH, "%s\\%s", DEST, argv[argc-1]);
+    snprintf(REGISTRO_LASTARG, MAX_PATH, "%s", argv[argc-1]);
 
     if (argc == 1){
-        printf(BLUE "salvaguarda " RESET "versão " BLUE "%s\n\n" RESET, VER);
+        printf(BLUE "salvaguarda " RESET "versão " BLUE "%s " RESET "windows\n", VER);
+        printf("digite '"BLUE "salt -ajuda" RESET"' para saber mais\n\n");
+        listRegistros();    
+        return 0;
+    }    
+    else if (argc == 2){
+        if (strcmp(argv[argc-1], "-ajuda") == 0){
+            intro();
+            return 0;
+        }
 
-        listRegistros();
-        printf("\n");
+        newBuild(proj_path, reg_path);
         return 0;
     }
-    
-    char ppath[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, ppath);
-    char regDir[MAX_PATH] = "";
-    snprintf(regDir, MAX_PATH, "%s\\%s", DEST, argv[argc-1]);
-    
-    if (argc == 2){
-        newBuild(ppath, regDir);
-    }
 
-    else{
-        int modes = 0;
-        int load_flag_i = 0;
-
-        for (int i = 1; i < argc-1; i++){
-            if ((startsWith(argv[i], "-new") == 1)) modes |= M_NEW;
-            if ((startsWith(argv[i], "-load") == 1)) {modes |= M_LOAD; load_flag_i = i;}
-            if ((startsWith(argv[i], "-exe") == 1)) modes |= M_EXE;
+    int flags = 0;
+    int special_flag_index = 0;
+    int load_flag_index = 0;
+    
+    for (int i = 1; i < argc-1; i++){
+        //muda algo
+        if ((startsWith(argv[i], "-from") == 1)){
+            char new_path[MAX_PATH];
+            snprintf(new_path, MAX_PATH, "%s", argv[i]+5);
+            DWORD fa = GetFileAttributes(new_path);
+            if (fa == INVALID_FILE_ATTRIBUTES || ((fa & FILE_ATTRIBUTE_DIRECTORY) == 0)){
+                printf("caminho indevido / inexistente.");
+                return 0;
+            }
+            snprintf(proj_path, MAX_PATH, "%s", new_path);
         }
-
-        if ((modes & M_NEW) == M_NEW){
-            criarDirRegistro(regDir);
+        
+        //termina programa
+        else if ((startsWith(argv[i], "-new") == 1)){
+            criarDirRegistro(reg_path);
             return 0;
         }
+        else if ((startsWith(argv[i], "-view") == 1)){
+            char build_path[MAX_PATH];
+    
+            if (argv[i][5] != '\0'){
+                snprintf(build_path, MAX_PATH, "%s\\build\\%s", reg_path, argv[i]+5);
+                printf("\n");
+                fileTravel(build_path, 1, 1, 1);
+                return 0;
+            }
 
-        if ((modes & M_LOAD) == M_LOAD){
-            int n = -1;
-
-            char verString[15];
-            snprintf(verString, (size_t)15, "%s", argv[load_flag_i]+5);
-            if (verString[0] != '\0') n = atoi(verString);
-
-            loadBuild(regDir, ppath, n);
-            
+            snprintf(build_path, MAX_PATH, "%s\\build", reg_path, argv[i]+5);
+            fileTravel(build_path, 0, 0 ,1);
             return 0;
         }
-
-        if ((modes & M_EXE) == M_EXE){
-            ignore_exes = 0;
+        
+        
+        //levanta flag
+        else if ((startsWith(argv[i], "-load") == 1)){
+            load_flag_index = i;
+            flags |= M_LOAD;
+        } 
+        else if ((startsWith(argv[i], "-esp") == 1)){
+            special_flag_index = i;
+            flags |= M_SPC;
         }
-
-        newBuild(ppath, regDir);
+        else if ((startsWith(argv[i], "-msg") == 1)) flags |= M_CPYMSG;
     }
+
+    //flags exclusivas
+    if ((flags & M_LOAD) == M_LOAD){
+        char ver_string[50];
+        snprintf(ver_string, (size_t)50, "%s", argv[load_flag_index]+5);
+
+        loadBuild(reg_path, proj_path, ver_string);
+        return 0;
+    }
+
+
+    //nao exclusivas
+    if ((flags & M_CPYMSG) == M_CPYMSG){
+        copy_messages = 1;
+    }
+    if ((flags & M_SPC) == M_SPC){
+        char nome_build[50];
+        snprintf(nome_build, (size_t)50, "%s", argv[special_flag_index]+4);
+        newSpecialBuild(proj_path, reg_path, nome_build);
+        return 0;
+    }
+    newBuild(proj_path, reg_path);
 
     return 0;
 }

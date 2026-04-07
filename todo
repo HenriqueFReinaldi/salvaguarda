@@ -1,0 +1,72 @@
+
+    PROGRAMA CRASHA QUANDO -LOAD EM REGISTRO INEXISTENTE..
+
+pra criar:
+    diff:
+        salt -diff 01 05 salvaguarda
+        
+
+    flag para desencluir certas pastas / arquivos do processo de salvamento
+        salt -Efreadwrite.c salvaguarda
+        salt -Edsha salvaguarda
+
+
+    Logging:
+        registro
+            build   
+            conteudo
+            logs.txt:
+
+                18:13 08/02/2026:
+                    Nova build: D:\sv\teste\build\1
+                    Copiado: C:\Users\henri\Documentos\projetos\p\projetosC\salvaguarda\lr -> D:\sv\teste\conteudo\e1cbc7e56ce920cb63fa0a9570522b629ecd87da
+                    Copiado: C:\Users\henri\Documentos\projetos\p\projetosC\salvaguarda\sal.c -> D:\sv\teste\conteudo\ef3ee45068eff63b09fd51af83fcb8a3b598a700
+                    Copiado: C:\Users\henri\Documentos\projetos\p\projetosC\salvaguarda\sha\libcrypto-3-x64.dll -> D:\sv\teste\conteudo\9fd61d6e1b211fe32e9dd72310558f29577d7949
+                    Copiado: C:\Users\henri\Documentos\projetos\p\projetosC\salvaguarda\svconfig -> D:\sv\teste\conteudo\d1c08d29d976a67b23c21c16c994aa981c66372f
+                    Copiado: C:\Users\henri\Documentos\projetos\p\projetosC\salvaguarda\todo -> D:\sv\teste\conteudo\da3c9d2302f0ace998fcf62f1353b995e758cae9
+                    Copiado: C:\Users\henri\Documentos\projetos\p\projetosC\salvaguarda\util.c -> D:\sv\teste\conteudo\bd0b9c18b89541eebf63fa4f432d8bf7215c432a
+                    Copiado: C:\Users\henri\Documentos\projetos\p\projetosC\salvaguarda\util.h -> D:\sv\teste\conteudo\0c9905e3e4175fdf4285c31e63ba0f7aa1de419b
+                                    
+                19:15 ...
+
+
+====================================================================================================================================
+
+USO:
+
+    Sem argumentos:
+        salt                            | Mostra todos os registros.
+
+
+    Um unico argumento:
+        salt {registro}                 | Salva diretório pro registro.
+
+
+    Argumentos exclusivos:
+        salt -view{build} {registro}    | Mostra todas as builds do registro. Caso {build} seja usado, mostra a build.
+                                        |
+
+        salt -new {registro}            | Cria novo registro. ( salt -new salvaguarda )
+
+        salt -load{n} {registro}        | Carrega a versão {n} do registro.   ( salt -load1 salvaguarda ) - ( salt -loadTESTE salvaguarda )
+                                        | Sem n, é carregada a ultima versão: ( salt -load salvaguarda )
+
+
+    Argumentos não exclusivos:
+        salt -msg salvaguarda           | Mostra mensagens de copiar
+    
+        salt -exe salvaguarda           | Salva também os arquivos .exe.
+    
+        salt -esp{nome} salvaguarda     | Cria uma build com nome especial ( salt -Simportante salvaguarda )
+    
+
+
+        salt -from{D} salvaguarda       | Ao invés de usar o diretorio de execução, usa {D} ( salt -from"D:\sv\LIBraylib5.5" salvaguarda)
+                                        |                                                   ( salt -from"D:\sv\LIBraylib5.5" -load salvaguarda)
+
+====================================================================================================================================
+
+INFO:
+
+    gcc sal.c readwrite.c -o sal -lssl -lcrypto
+    msys2 pacman -S mingw-w64-x86_64-openssl

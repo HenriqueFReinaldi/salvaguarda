@@ -1,0 +1,2 @@
+D:\teste
+tignore .exe
