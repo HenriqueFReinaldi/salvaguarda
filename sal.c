@@ -75,12 +75,19 @@ int new_files = 0;
 
 int getFileHash(FILE* f, char hash[41]){
     static size_t size = 0;
+
+    static size_t content_size = 0;
     static char* content;
 
-    staticGrowReadFile(f, &size, &content);
+    int result = staticGrowReadFile(f, &size, &content, &content_size);
+
+    // printf("\n\n%s conteudo:%lld tamanhodobuffer:%lld [%d] \n\n", content, content_size, size, result);
+    // char c;
+    // scanf("%c", &c);
+
 
     unsigned char out[SHA_DIGEST_LENGTH]; 
-    SHA1((unsigned char*)content, size, out);
+    SHA1((unsigned char*)content, content_size, out);
 
     for(int i = 0; i < SHA_DIGEST_LENGTH; i++) {
         sprintf(hash+i*2, "%02x", out[i]);
@@ -120,7 +127,7 @@ void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
 
                 if (can_copy){
                     FILE* f = fopen(fonte_path, "rb");
-                    char hash[41];
+                    char hash[41] = {0};
                     getFileHash(f, hash);
                     fclose(f);
 
@@ -430,7 +437,7 @@ int main(int argc, char** argv){
         }
         else if ((startsWith(argv[i], "-msg") == 1)) flags |= M_CPYMSG;
     }
-
+    //flags |= M_CPYMSG;
     //flags exclusivas
     if ((flags & M_LOAD) == M_LOAD){
         char ver_string[50];

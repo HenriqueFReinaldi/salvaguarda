@@ -1,7 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define VER "02.04.2026.1"
+#define VER "07.04.2026.1"
 
 #include "set/set.h"
 #include <string.h>
@@ -32,7 +32,7 @@ int startsWith(char* a, char* b);
 
 int readFile(FILE* f, size_t* size, char** content);
 int noMallocReadFile(FILE* f, size_t size, char* content);
-int staticGrowReadFile(FILE* f, size_t* size, char** content);
+int staticGrowReadFile(FILE* f, size_t* size, char** content, size_t* content_size);
 
 int writeFile(FILE* f, char* content);
 

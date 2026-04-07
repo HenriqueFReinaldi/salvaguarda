@@ -48,28 +48,29 @@ int noMallocReadFile(FILE* f, size_t size, char* content){
     return 0;
 }
 
-int staticGrowReadFile(FILE* f, size_t* size, char** content){
+int staticGrowReadFile(FILE* f, size_t* size, char** content, size_t* content_size){
     if (!f || !size || !content) return -1;
 
-    if (fseek(f, 0, SEEK_END) != 0) return -1;
+    if (fseek(f, 0, SEEK_END) != 0) return -2;
     long file_size = ftell(f);
-    if (file_size < 0) return -1;
+    if (file_size < 0) return -3;
 
-    if ((size_t)file_size > *size){
+    if ((size_t)file_size > (*size)){
         char* temp = realloc(*content, (size_t)file_size + 1);
-        if (!temp) return -1;
+        if (!temp) return -4;
 
         (*size) = (size_t)file_size;
         (*content) = temp;
     }
 
-    if (fseek(f, 0, SEEK_SET) != 0) return -1;
-    if (!*content) return -1;
+    if (fseek(f, 0, SEEK_SET) != 0) return -5;
+    if (!*content) return -6;
 
     size_t nread = fread(*content, 1, *size, f);
-    if (nread != *size)return -1;
+    if (nread > (*size))return -7;
 
-    (*content)[nread] = '\0';
+    (*content)[nread] = 0;
+    (*content_size) = nread;
     return 0;
 }
 
@@ -182,7 +183,6 @@ void intro(){
 
     printf("salt -view{build} {registro}    | Mostra todas as builds (ou uma determinada) do registro.\n");
     printf("salt -msg {registro}            | Mostra mensagens de copiar.\n");
-    printf("salt -exe {registro}            | Salva também os arquivos .exe.\n");
     printf("salt -esp{nome} {registro}      | Cria uma build com nome especial.\n");
 
     printf("Nota: não inclua as chaves nos comandos.\n\n");
