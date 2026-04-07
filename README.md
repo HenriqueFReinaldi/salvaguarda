@@ -24,4 +24,4 @@
     
   Build:
 
-    gcc sal.c readwrite.c -o salt -lssl -lcrypto
+    gcc sal.c util.c set/set.c -o sal -lssl -lcrypto
