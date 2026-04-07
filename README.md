@@ -16,6 +16,11 @@
     salt -msg {registro}            | Mostra mensagens de copiar.
     salt -esp{nome} {registro}      | Cria uma build com nome especial.
 
+    Nota: não inclua as chaves nos comandos.
+
+    Inclua o comando 'tignore {.tipo}' no arquivo svconfig.txt para excluir tipos de arquivos das builds.
+    Inclua o comando 'dignore {dir}' no arquivo svconfig.txt para excluir certos diretorios das builds.
+
 ### compilação:
 
   Requisitos:
