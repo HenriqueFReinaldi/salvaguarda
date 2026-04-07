@@ -5,15 +5,16 @@
 
 ### uso:
   
-    salt                      | mostra todos os registros.
+    salt {registro}                 | Cria uma nova build e manda pro registro.
+    salt -ajuda                     | Mostra esta lista.
     
-    salt salvaguarda          | salva diretório pro registro.
+    salt -new {registro}            | Cria um novo registro.
+    salt -load{n} {registro}        | Carrega a última versão (ou uma versão {n}) do registro pro diretório atual.
+    salt -from{d} {registro}        | Troca o diretório de execução para {d}.
     
-    salt -new salvaguarda     | cria novo registro.
-    salt -load salvaguarda    | carrega ultima versão do registro.
-    salt -load{n} salvaguarda | carrega versão {n} do registro.: salt -load2 salvaguarda
-    
-    salt -exe salvaguarda     | salva também os arquivos .exe.
+    salt -view{build} {registro}    | Mostra todas as builds (ou uma determinada) do registro.
+    salt -msg {registro}            | Mostra mensagens de copiar.
+    salt -esp{nome} {registro}      | Cria uma build com nome especial.
 
 ### compilação:
 
