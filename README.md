@@ -13,8 +13,9 @@
     salt -from{d} {registro}        | Troca o diretório de execução para {d}.
     
     salt -view{build} {registro}    | Mostra todas as builds (ou uma determinada) do registro.
-    salt -msg {registro}            | Mostra mensagens de copiar.
+    salt -info {registro}           | Mostra mensagens de copiar.
     salt -esp{nome} {registro}      | Cria uma build com nome especial.
+    salt -msg{mensagem} {registro}  | Manda uma mensagem para as logs.
 
     Nota: não inclua as chaves nos comandos.
 
