@@ -2,6 +2,12 @@
 
 
 //configurationes
+#define BUILDER_NAME_SIZE 50
+char BUILDER_NAME[BUILDER_NAME_SIZE];
+#define BUILDER_MESSAGE_SIZE 300
+char BUILDER_MESSAGE[BUILDER_MESSAGE_SIZE];
+
+
 char DEST[MAX_PATH];
 char REGISTRO_LASTARG[MAX_PATH];
 Set ignore_file_types = {100, 0, NULL};
@@ -173,47 +179,64 @@ void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
 }
 
     //create
-int newBuild(char* orig, char* dest){
-    char* last_slash_orig = strrchr(orig, '\\');
-    char orig_folder_name[MAX_PATH];
-    snprintf(orig_folder_name, MAX_PATH, last_slash_orig+1);
-
-    if (strcmp(orig_folder_name, REGISTRO_LASTARG) != 0){
-        char resposta;
-        printf("Mandar '" RED "%s" RESET "' para '" RED "%s" RESET"'? (s/n): ", orig_folder_name, REGISTRO_LASTARG);
-        scanf("%c", &resposta);
-        if (resposta != 's' && resposta != 'S') return 0;
-    }
-
-    char buildPath[MAX_PATH];
-    char conteudoPath[MAX_PATH];
-    char salverPath[MAX_PATH];
-    char newVerPath[MAX_PATH];
-    snprintf(buildPath, MAX_PATH, "%s\\build", dest);
-    snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
-    snprintf(salverPath, MAX_PATH, "%s\\salver", buildPath);
-
-    char* content;
-    size_t content_size = 0;
-
-    FILE* salf = fopen(salverPath, "rb");
-    readFile(salf, &content_size, &content);
-    fclose(salf);
-    int current_ver = atoi(content);
-
-    snprintf(newVerPath, MAX_PATH, "%s\\%d", buildPath, current_ver+1);
-    if(createCheckDir(newVerPath) != 0){
+int newBuild(char* orig, char* dest, char* nome){
+    if(GetFileAttributesA(dest) == INVALID_FILE_ATTRIBUTES){
         printf("Registro não existe.");
         return -1;
     }
 
-    char new_ver[30];
-    snprintf(new_ver, (size_t)30, "%d", current_ver+1);
-    
-    salf = fopen(salverPath, "wb");
-    writeFile(salf, new_ver);
-    fclose(salf);
-    
+    char buildPath[MAX_PATH];
+    char conteudoPath[MAX_PATH];
+    char logsPath[MAX_PATH];
+    char newVerPath[MAX_PATH];
+    snprintf(buildPath, MAX_PATH, "%s\\build", dest);
+    snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
+    snprintf(logsPath, MAX_PATH, "%s\\logs.txt", dest);
+
+    if (nome){
+        snprintf(newVerPath, MAX_PATH, "%s\\%s", buildPath, nome);
+
+        if (GetFileAttributesA(newVerPath) != INVALID_FILE_ATTRIBUTES) {
+            printf("Build ja existe.");
+            return -1;
+        }
+    }
+    else{
+        char* last_slash_orig = strrchr(orig, '\\');
+        char orig_folder_name[MAX_PATH];
+        snprintf(orig_folder_name, MAX_PATH, last_slash_orig+1);
+
+        if (strcmp(orig_folder_name, REGISTRO_LASTARG) != 0){
+            char resposta;
+            printf("Mandar '" RED "%s" RESET "' para '" RED "%s" RESET"'? (s/n): ", orig_folder_name, REGISTRO_LASTARG);
+            scanf("%c", &resposta);
+            if (resposta != 's' && resposta != 'S') return 0;
+        }
+
+
+        char salverPath[MAX_PATH];
+        snprintf(buildPath, MAX_PATH, "%s\\build", dest);
+        snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
+        snprintf(salverPath, MAX_PATH, "%s\\salver", buildPath);
+
+        char* content;
+        size_t content_size = 0;
+
+        FILE* salver_file = fopen(salverPath, "rb");
+        readFile(salver_file, &content_size, &content);
+        fclose(salver_file);
+        int current_ver = atoi(content)+1;
+
+        snprintf(newVerPath, MAX_PATH, "%s\\%d", buildPath, current_ver);
+
+        char new_ver[30];
+        snprintf(new_ver, (size_t)30, "%d", current_ver);
+        
+        salver_file = fopen(salverPath, "wb");
+        writeFile(salver_file, new_ver);
+        fclose(salver_file);
+    }
+
     file_count = fileTravel(orig, 1, 0, 0);
     
     printf("Nova build: %s\n",newVerPath);
@@ -222,41 +245,35 @@ int newBuild(char* orig, char* dest){
     printf("\nArquivos novos: "BLUE "%d\n" RESET, new_files);
     printf("Arquivos ignorados: "RED "%d\n" RESET, files_ignored);
 
+    time_t agora = time(NULL);
+    struct tm* tm_info = localtime(&agora);
+
+
+    char log_buffer[MAX_PATH*3];
+    snprintf(log_buffer, MAX_PATH*3, 
+        "%d/%02d/%02d - %02d:%02d:%02d:\n"
+        "    nova build: %s\n"
+        "    builder: %s\n"
+        "    mensagem: %s\n\n",
+        tm_info->tm_mday, tm_info->tm_mon+1, tm_info->tm_year+1900, tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec, 
+        newVerPath, 
+        BUILDER_NAME,
+        BUILDER_MESSAGE
+    );
+
+    FILE* logs_file = fopen(logsPath, "a");
+    if (logs_file) writeFile(logs_file, log_buffer);
+    fclose(logs_file);
     return 0;
 }
-
-int newSpecialBuild(char* orig, char* dest, char* nome){
-    char buildPath[MAX_PATH];
-    char conteudoPath[MAX_PATH];
-    char newVerPath[MAX_PATH];
-
-    snprintf(buildPath, MAX_PATH, "%s\\build", dest);
-    snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
-    snprintf(newVerPath, MAX_PATH, "%s\\%s", buildPath, nome);
-
-    if (GetFileAttributesA(newVerPath) != INVALID_FILE_ATTRIBUTES) {
-        printf("Build ja existe.");
-        return -1;
-    }
-
-    if(createCheckDir(newVerPath) != 0){
-        printf("Registro não existe.");
-        return -1;
-    }
-    
-    file_count = fileTravel(orig, 1, 0, 0);
-
-    printf("Nova build: %s\n",newVerPath);
-    printf("Arquivos a serem processados: %d\n", file_count);
-    hashCLBuild(orig, newVerPath, conteudoPath, 1);
-    printf("\nArquivos novos: "BLUE "%d\n" RESET, new_files);
-    printf("Arquivos ignorados: "RED "%d\n" RESET, files_ignored);
-    return 0;
-}
-
 
     //load
 int loadBuild(char* orig, char* dest, char* ver){
+    if(GetFileAttributesA(orig) == INVALID_FILE_ATTRIBUTES){
+        printf("Registro não existe.");
+        return -1;
+    }
+
     char salver_path[MAX_PATH];
     snprintf(salver_path, MAX_PATH, "%s\\build\\salver", orig);
 
@@ -325,9 +342,8 @@ void init(){
     initSet(&ignore_file_types);
     initSet(&ignore_folders);
 
+    snprintf(BUILDER_NAME, BUILDER_NAME_SIZE, "nem deus sabe");
     
-    
-
     char program_path[MAX_PATH]; 
     GetModuleFileNameA(NULL, program_path, MAX_PATH);
     *strrchr(program_path, '\\') = '\0';
@@ -342,7 +358,9 @@ void init(){
     if (!f) msgExit("Sem arquivo svconfig...");
 
     getFileLines(f, &svconfig_lines, &line_count);
+
     fclose(f);
+
     if (line_count > 0){
         strcpy(DEST, svconfig_lines[0]);
     }
@@ -358,6 +376,9 @@ void init(){
         else if (startsWith(svconfig_lines[i], "tignore ") == 1){
             addKey(&ignore_file_types, resto);
         }
+        else if (startsWith(svconfig_lines[i], "builder ") == 1){
+            snprintf(BUILDER_NAME, BUILDER_NAME_SIZE, "%s", resto);
+        }
     }
 
     if (createCheckDir(DEST) != 0) msgExit("Falha em criar / achar diretorio destino (primeira linha svconfig)");
@@ -368,6 +389,7 @@ int main(int argc, char** argv){
     char reg_path[MAX_PATH];
 
     init();
+
     GetCurrentDirectoryA(MAX_PATH, proj_path);
     snprintf(reg_path, MAX_PATH, "%s\\%s", DEST, argv[argc-1]);
     snprintf(REGISTRO_LASTARG, MAX_PATH, "%s", argv[argc-1]);
@@ -384,7 +406,7 @@ int main(int argc, char** argv){
             return 0;
         }
 
-        newBuild(proj_path, reg_path);
+        newBuild(proj_path, reg_path, NULL);
         return 0;
     }
 
@@ -404,7 +426,11 @@ int main(int argc, char** argv){
             }
             snprintf(proj_path, MAX_PATH, "%s", new_path);
         }
-        
+        else if ((startsWith(argv[i], "-msg") == 1)){
+            snprintf(BUILDER_MESSAGE, BUILDER_MESSAGE_SIZE, "%s", argv[i]+4);
+        }
+
+
         //termina programa
         else if ((startsWith(argv[i], "-new") == 1)){
             criarDirRegistro(reg_path);
@@ -435,7 +461,7 @@ int main(int argc, char** argv){
             special_flag_index = i;
             flags |= M_SPC;
         }
-        else if ((startsWith(argv[i], "-msg") == 1)) flags |= M_CPYMSG;
+        else if ((startsWith(argv[i], "-info") == 1)) flags |= M_CPYMSG;
     }
     //flags |= M_CPYMSG;
     //flags exclusivas
@@ -455,10 +481,10 @@ int main(int argc, char** argv){
     if ((flags & M_SPC) == M_SPC){
         char nome_build[50];
         snprintf(nome_build, (size_t)50, "%s", argv[special_flag_index]+4);
-        newSpecialBuild(proj_path, reg_path, nome_build);
+        newBuild(proj_path, reg_path, nome_build);
         return 0;
     }
-    newBuild(proj_path, reg_path);
+    newBuild(proj_path, reg_path, NULL);
 
     return 0;
 }

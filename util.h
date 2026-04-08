@@ -1,9 +1,10 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define VER "07.04.2026.1"
+#define VER "07.04.2026.3"
 
 #include "set/set.h"
+#include <time.h>
 #include <string.h>
 #include <stdlib.h>
 #include <windows.h>

@@ -66,7 +66,7 @@ int staticGrowReadFile(FILE* f, size_t* size, char** content, size_t* content_si
     if (fseek(f, 0, SEEK_SET) != 0) return -5;
     if (!*content) return -6;
 
-    size_t nread = fread(*content, 1, *size, f);
+    size_t nread = fread(*content, 1, file_size, f);
     if (nread > (*size))return -7;
 
     (*content)[nread] = 0;
@@ -84,13 +84,13 @@ int writeFile(FILE* f, char* content){
     return 0;
 }
 
-int getFileLines(FILE* f, char*** lines, size_t* qtd_linhas){//limite de 200 linhas!!!
+int getFileLines(FILE* f, char*** lines, size_t* qtd_linhas){//limite de 300 linhas!!!
     size_t size;
     char* content;
     readFile(f, &size, &content);
     size_t lc = 1;
 
-    size_t line_size[200] = {0};
+    size_t line_size[300] = {0};
     size_t ls_index = 0;
 
     for (size_t i = 0; i < size; i++){
@@ -100,6 +100,7 @@ int getFileLines(FILE* f, char*** lines, size_t* qtd_linhas){//limite de 200 lin
             ls_index++;
         }
     }
+
     (*lines) = malloc(lc*sizeof(char*));
 
     size_t last_index = 0;
@@ -114,16 +115,17 @@ int getFileLines(FILE* f, char*** lines, size_t* qtd_linhas){//limite de 200 lin
         if (offset < line_size[i]){
             new_line = malloc(line_size[i]-offset+1);
             memcpy(new_line, content+last_index, line_size[i]-offset);
+            new_line[line_size[i]-offset] = '\0';
         }
-
-        new_line[line_size[i]-offset] = '\0';
+        else new_line = "";
+        
+        
         last_index += line_size[i];
-
         (*lines)[i] = new_line;
     }
     
-
     (*qtd_linhas) = ++ls_index;
+
     return 0;
 }
 
@@ -182,8 +184,9 @@ void intro(){
     printf("salt -from{d} {registro}        | Troca o diretório de execução para {d}.\n\n");
 
     printf("salt -view{build} {registro}    | Mostra todas as builds (ou uma determinada) do registro.\n");
-    printf("salt -msg {registro}            | Mostra mensagens de copiar.\n");
+    printf("salt -info {registro}           | Mostra mensagens de copiar.\n");
     printf("salt -esp{nome} {registro}      | Cria uma build com nome especial.\n");
+    printf("salt -msg{mensagem} {registro}  | Manda uma mensagem para as logs.\n");
 
     printf("Nota: não inclua as chaves nos comandos.\n\n");
 
