@@ -1,7 +1,7 @@
 
 # salvaguarda
 
-É uma ferramenta extremamente simples que criei para me ajudar na criação de registros do estado de projetos no Windows.
+É uma ferramenta extremamente simples de versionamento de código que criei para plataforma Windows.
 
 ### uso:
   
