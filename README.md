@@ -28,7 +28,3 @@
     
     GCC 64 bits (x86_64)
     Biblioteca de desenvolvimento OpenSSL (libssl, libcrypto)
-    
-  Build:
-
-    gcc sal.c util.c set/set.c -o sal -lssl -lcrypto
