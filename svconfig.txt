@@ -1,5 +1,5 @@
-D:\teste
+C:\teste
 
-builder carlosdealmeida
+builder pedrin_du_pineu
 
 tignore .exe

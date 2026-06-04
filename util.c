@@ -137,44 +137,34 @@ void msgExit(const char *fmt, ...){
     exit(0);
 }
 
-int fileTravel(char* path, int recursion, int show_files, int show_folders){
-    int count = 0;
+int count_files(char* path, int recursion){
+    DirIt* p = init_dirit(path, recursion);
+    int c = 0;
+    int r;
+    while(r = path_travel(&p)){
+        if (r == 2) continue;
+        if (p->is_file)c++;
+    }
+    return c;
+}
 
-    WIN32_FIND_DATA fd;
-    char new_path[MAX_PATH];
-    snprintf(new_path, MAX_PATH, "%s\\*", path);
+void display_dir(char* path, int recursion, int show_files, int show_folders){
+    DirIt* p = init_dirit(path, recursion);
+    int r;
 
+    while(r = path_travel(&p)){
+        if (r == 2) continue;
 
-    HANDLE hFind = FindFirstFile(new_path, &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return 0;
-
-    do {
-        if (strcmp(fd.cFileName, ".") && strcmp(fd.cFileName, "..")){
-            
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                if (show_folders) {
-                    for (int i = 1; i < recursion; i++) printf("    ");
-                    printf(BLUE"/%s\n" RESET, fd.cFileName);
-                }
-
-                if (recursion > 0){
-                    char folder_path[MAX_PATH];
-                    snprintf(folder_path, MAX_PATH, "%s\\%s", path, fd.cFileName);
-                    count += fileTravel(folder_path, recursion+1, show_files, show_folders);
-                }
-            }
-            else{
-                if (show_files){
-                    for (int i = 1; i < recursion; i++) printf("    ");
-                    printf("%s\n", fd.cFileName);
-                } 
-                count++;
-            }
+        if (p->is_file && show_files){
+            for (int i = 0; i < p->depth; i++) printf("    ");
+            printf("%s\n", p->item_name);
         }
-    } while(FindNextFile(hFind, &fd));
 
-    FindClose(hFind);
-    return count;;
+        if (!p->is_file && show_folders){
+            for (int i = 1; i < p->depth; i++) printf("    ");
+            printf(COR_OK"/%s\n" RESET, p->item_name);
+        }
+    }
 }
 
 void intro(){
@@ -191,5 +181,5 @@ void intro(){
     printf("Nota: não inclua as chaves nos comandos.\n\n");
 
     printf("Inclua o comando 'tignore {.tipo}' no arquivo svconfig.txt para excluir tipos de arquivos das builds.\n");
-    printf("Inclua o comando 'dignore {dir}' no arquivo svconfig.txt para excluir certos diretorios das builds;");
+    printf("Inclua o comando 'dignore {dir}' no arquivo svconfig.txt para excluir certos diretorios das builds.\n");
 }

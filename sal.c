@@ -23,38 +23,32 @@ Set ignore_folders = {100, 0, NULL};
 #define M_CPYMSG 0x20 // mostrar mensagems de copiar
 
 //dirs
-int createCheckDir(char* dest){
-    if (!(CreateDirectory(dest, NULL) || GetLastError() == ERROR_ALREADY_EXISTS)){
-        return -1;
-    } 
-    return 0;
-}
 
 void criarDirRegistro(char* path){
-    if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES) {
-        printf("Registro ja existe.");
+    if (path_acessible(path)) {
+        printf("Registro ja existe.\n");
         return;
     }
 
-    if(!CreateDirectory(path, NULL)){
+    if(!createdir(path)){
         printf("erro");
         return;
     }
     char contentPath[MAX_PATH];
     char buildPath[MAX_PATH];
-    snprintf(contentPath, MAX_PATH, "%s\\conteudo", path);
-    snprintf(buildPath, MAX_PATH, "%s\\build", path);
+    snprintf(contentPath, MAX_PATH, "%s" PATH_SEP_STR "conteudo", path);
+    snprintf(buildPath, MAX_PATH, "%s" PATH_SEP_STR "build", path);
 
-    if(!CreateDirectory(contentPath, NULL)){
+    if(!createdir(contentPath)){
         printf("erro");
         return;
     }
-    if(!CreateDirectory(buildPath, NULL)){
+    if(!createdir(buildPath)){
         printf("erro");
         return;
     }
 
-    snprintf(buildPath, MAX_PATH,"%s\\build\\salver", path);
+    snprintf(buildPath, MAX_PATH,"%s" PATH_SEP_STR "build" PATH_SEP_STR "salver", path);
 
     FILE* f = fopen(buildPath, "w");
     if (!f){
@@ -65,7 +59,7 @@ void criarDirRegistro(char* path){
     fclose(f);
 
 
-    printf("Criado novo registro: %s", path);
+    printf("Criado novo registro: %s\n", path);
     return;
 }
 
@@ -101,87 +95,104 @@ int getFileHash(FILE* f, char hash[41]){
     return 0;
 }
 
-
-void hashCLBuild(char* orig, char* dest, char* conteudo, int copy){
-    WIN32_FIND_DATA fd;
+void hashLoadBuild(char* orig, char* dest, char* cont_path){
     char fonte_path[MAX_PATH];
     char dest_path[MAX_PATH];
-    CreateDirectory(dest, NULL);
+    createdir(dest);
 
-    snprintf(fonte_path, MAX_PATH, "%s\\*", orig);
-    HANDLE hFind = FindFirstFile(fonte_path, &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return;
+    DirIt* p = init_dirit(orig, 1);
 
-    do {
-        if (strcmp(fd.cFileName, ".") && strcmp(fd.cFileName, "..")){
-            snprintf(fonte_path, MAX_PATH, "%s\\%s", orig, fd.cFileName);
-            snprintf(dest_path, MAX_PATH, "%s\\%s", dest, fd.cFileName);
+    int path_length = strlen(orig);
+    int r;
+    while(r = path_travel(&p)){
+        if (r == 2) continue;
 
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                if (!contains(ignore_folders, fd.cFileName)) hashCLBuild(fonte_path, dest_path, conteudo, copy);
-                else{
-                    int ignored = fileTravel(fonte_path, 1, 0, 0);
-                    files_ignored += ignored;
-                    files_done += ignored;
-                }
-            }
-            else if (copy){
-                int can_copy = 1;
+        snprintf(dest_path, MAX_PATH, "%s%s", dest, p->item_path+path_length);
+        if (p->is_file){
+            snprintf(fonte_path, MAX_PATH, "%s" PATH_SEP_STR "%s", p->path, p->item_name);
+            
+            char file_hash[50];
+            FILE* f = fopen(fonte_path, "rb");
+            noMallocReadFile(f, 50, file_hash);
+            fclose(f);
 
-                char* ext_dot = strrchr(fd.cFileName, '.');
-                if (ext_dot != NULL && contains(ignore_file_types, ext_dot)) can_copy = 0;
+            char file_content_path[MAX_PATH];
+            snprintf(file_content_path, MAX_PATH, "%s" PATH_SEP_STR "%s", cont_path, file_hash);
 
-                if (can_copy){
-                    FILE* f = fopen(fonte_path, "rb");
-                    char hash[41] = {0};
-                    getFileHash(f, hash);
-                    fclose(f);
-
-                    char file_path[MAX_PATH];
-                    snprintf(file_path, MAX_PATH, "%s\\%s",conteudo, hash);
-
-                    DWORD at = GetFileAttributesA(file_path);
-                    if(!(at != INVALID_FILE_ATTRIBUTES && !(at & FILE_ATTRIBUTE_DIRECTORY))){
-                        CopyFile(fonte_path, file_path, FALSE);
-                        new_files++;
-                        if (copy_messages) printf("Copiado : %s -> %s\n", fonte_path, file_path);
-                    }
-
-                    f = fopen(dest_path, "wb");
-                    writeFile(f, hash);
-                    fclose(f);
-                }
-                else{
-                    if (copy_messages) printf(RED "Ignorado: " RESET "%s\n", fonte_path);
-                    files_ignored++;
-                }
-                files_done++;
-                if (!copy_messages) printf("Progresso:" BLUE " %d\% (%d/%d)\r" RESET, (int)(((float)files_done/file_count)*100),files_done, file_count);
-            }
-            else{
-                size_t size = 50;
-                char content_name[size];
-                
-                FILE* f = fopen(fonte_path, "rb");
-                noMallocReadFile(f, size, content_name);
-                fclose(f);
-
-                char file_content_path[MAX_PATH];
-                snprintf(file_content_path, MAX_PATH, "%s\\%s", conteudo, content_name);
-
-                CopyFile(file_content_path, dest_path, FALSE);
-            }
-
+            copy_file(file_content_path, dest_path);
         }
-    } while(FindNextFile(hFind, &fd));
+        else{
+            createdir(dest_path);
+        }
 
-    FindClose(hFind);
+
+    }
+
+}
+
+void hashCopyBuild(char* orig, char* dest, char* cont_path){
+    char fonte_path[MAX_PATH];
+    char dest_path[MAX_PATH];
+    createdir(dest);
+    DirIt* p = init_dirit(orig, 1);
+
+    int path_length = strlen(orig);
+    int r;
+    while(r = path_travel(&p)){
+        if (r == 2) continue;
+
+        snprintf(dest_path, MAX_PATH, "%s%s", dest, p->item_path+path_length);
+        if (p->is_file){
+            snprintf(fonte_path, MAX_PATH, "%s" PATH_SEP_STR "%s", p->path, p->item_name);
+            char* ext_dot = strrchr(p->item_name, '.');
+            if ((ext_dot != NULL && contains(ignore_file_types, ext_dot))){
+                if (copy_messages) printf(COR_NOK "Ignorado" RESET ": %s\n", fonte_path);
+                files_ignored++;
+                goto progresso;
+            } 
+
+            //copiar
+            FILE* f = fopen(fonte_path, "rb");
+            char hash[41] = {0};
+            getFileHash(f, hash);
+            fclose(f);
+
+            char file_path[MAX_PATH];
+            snprintf(file_path, MAX_PATH, "%s" PATH_SEP_STR "%s", cont_path, hash);
+
+            if(!path_acessible(file_path) || is_folder(file_path)){
+                new_files++;
+
+                copy_file(fonte_path, file_path);
+                if (copy_messages) printf("Copiado : %s -> %s\n", fonte_path, file_path);
+            }
+            f = fopen(dest_path, "wb");
+            writeFile(f, hash);
+            fclose(f);
+
+            progresso:
+            files_done++;
+            if (!copy_messages) printf("Progresso:" COR_OK " %d%% (%d/%d)\r" RESET, (int)(((float)files_done/file_count)*100),files_done, file_count);
+        }
+        else {
+            if (contains(ignore_folders, p->item_name)){
+                int ignored = count_files(p->path, 1);
+                printf(COR_NOK "Ignorados" RESET " [%d] de %s\n", ignored, p->path);
+                files_ignored += ignored;
+                files_done += ignored;
+
+                skip_folder(&p);
+                continue;
+            }
+            createdir(dest_path);
+        }
+    }
 }
 
     //create
 int newBuild(char* orig, char* dest, char* nome){
-    if(GetFileAttributesA(dest) == INVALID_FILE_ATTRIBUTES){
-        printf("Registro não existe.");
+    if(!path_acessible(dest)){
+        printf("Registro não existe.\n");
         return -1;
     }
 
@@ -189,35 +200,35 @@ int newBuild(char* orig, char* dest, char* nome){
     char conteudoPath[MAX_PATH];
     char logsPath[MAX_PATH];
     char newVerPath[MAX_PATH];
-    snprintf(buildPath, MAX_PATH, "%s\\build", dest);
-    snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
-    snprintf(logsPath, MAX_PATH, "%s\\logs.txt", dest);
+    snprintf(buildPath, MAX_PATH, "%s" PATH_SEP_STR "build", dest);
+    snprintf(conteudoPath, MAX_PATH, "%s" PATH_SEP_STR "conteudo", dest);
+    snprintf(logsPath, MAX_PATH, "%s" PATH_SEP_STR "logs.txt", dest);
 
     if (nome){
-        snprintf(newVerPath, MAX_PATH, "%s\\%s", buildPath, nome);
+        snprintf(newVerPath, MAX_PATH, "%s" PATH_SEP_STR "%s", buildPath, nome);
 
-        if (GetFileAttributesA(newVerPath) != INVALID_FILE_ATTRIBUTES) {
-            printf("Build ja existe.");
+        if (path_acessible(newVerPath)) {
+            printf("Build ja existe.\n");
             return -1;
         }
     }
     else{
-        char* last_slash_orig = strrchr(orig, '\\');
+        char* last_slash_orig = strrchr(orig, PATH_SEP);
         char orig_folder_name[MAX_PATH];
-        snprintf(orig_folder_name, MAX_PATH, last_slash_orig+1);
+        snprintf(orig_folder_name, MAX_PATH, "%s", last_slash_orig+1);
 
         if (strcmp(orig_folder_name, REGISTRO_LASTARG) != 0){
             char resposta;
-            printf("Mandar '" RED "%s" RESET "' para '" RED "%s" RESET"'? (s/n): ", orig_folder_name, REGISTRO_LASTARG);
+            printf("Mandar [" COR_OK "%s" RESET "] para [" COR_OK "%s" RESET"] (s/n): ", orig_folder_name, REGISTRO_LASTARG);
             scanf("%c", &resposta);
             if (resposta != 's' && resposta != 'S') return 0;
         }
 
 
         char salverPath[MAX_PATH];
-        snprintf(buildPath, MAX_PATH, "%s\\build", dest);
-        snprintf(conteudoPath, MAX_PATH, "%s\\conteudo", dest);
-        snprintf(salverPath, MAX_PATH, "%s\\salver", buildPath);
+        (void)snprintf(buildPath, MAX_PATH, "%s" PATH_SEP_STR "build", dest);
+        (void)snprintf(conteudoPath, MAX_PATH, "%s" PATH_SEP_STR "conteudo", dest);
+        (void)snprintf(salverPath, MAX_PATH, "%s" PATH_SEP_STR "salver", buildPath);
 
         char* content;
         size_t content_size = 0;
@@ -227,7 +238,7 @@ int newBuild(char* orig, char* dest, char* nome){
         fclose(salver_file);
         int current_ver = atoi(content)+1;
 
-        snprintf(newVerPath, MAX_PATH, "%s\\%d", buildPath, current_ver);
+        snprintf(newVerPath, MAX_PATH, "%s" PATH_SEP_STR "%d", buildPath, current_ver);
 
         char new_ver[30];
         snprintf(new_ver, (size_t)30, "%d", current_ver);
@@ -237,13 +248,16 @@ int newBuild(char* orig, char* dest, char* nome){
         fclose(salver_file);
     }
 
-    file_count = fileTravel(orig, 1, 0, 0);
+    file_count = count_files(orig, 1);
     
     printf("Nova build: %s\n",newVerPath);
     printf("Arquivos a serem processados: %d\n", file_count);
-    hashCLBuild(orig, newVerPath, conteudoPath, 1);
-    printf("\nArquivos novos: "BLUE "%d\n" RESET, new_files);
-    printf("Arquivos ignorados: "RED "%d\n" RESET, files_ignored);
+
+    hashCopyBuild(orig, newVerPath, conteudoPath);
+
+    printf("\nArquivos novos: "COR_OK "%d\n" RESET, new_files);
+    printf("Arquivos ignorados: "COR_OK "%d\n" RESET, files_ignored);
+    printf("Arquivos duplicados: "COR_OK "%d" RESET"\n",  file_count-(new_files+files_ignored));
 
     time_t agora = time(NULL);
     struct tm* tm_info = localtime(&agora);
@@ -269,17 +283,17 @@ int newBuild(char* orig, char* dest, char* nome){
 
     //load
 int loadBuild(char* orig, char* dest, char* ver){
-    if(GetFileAttributesA(orig) == INVALID_FILE_ATTRIBUTES){
-        printf("Registro não existe.");
+    if(!path_acessible(orig)){
+        printf("Registro não existe.\n");
         return -1;
     }
 
     char salver_path[MAX_PATH];
-    snprintf(salver_path, MAX_PATH, "%s\\build\\salver", orig);
+    snprintf(salver_path, MAX_PATH, "%s" PATH_SEP_STR "build" PATH_SEP_STR "salver", orig);
 
     char build_path[MAX_PATH];
     if (strlen(ver) != 0){
-        snprintf(build_path, MAX_PATH, "%s\\build\\%s", orig, ver);
+        snprintf(build_path, MAX_PATH, "%s" PATH_SEP_STR "build" PATH_SEP_STR "%s", orig, ver);
     }
     else{
         char* content;
@@ -287,69 +301,68 @@ int loadBuild(char* orig, char* dest, char* ver){
         FILE* f = fopen(salver_path, "rb");
         readFile(f, &size, &content);
         fclose(f);
-        snprintf(build_path, MAX_PATH, "%s\\build\\%s", orig, content);
+        snprintf(build_path, MAX_PATH, "%s" PATH_SEP_STR "build" PATH_SEP_STR "%s", orig, content);
         free(content);
     }
 
     char conteudo_path[MAX_PATH];
-    snprintf(conteudo_path, MAX_PATH, "%s\\conteudo", orig);
+    snprintf(conteudo_path, MAX_PATH, "%s" PATH_SEP_STR "conteudo", orig);
 
-    if (GetFileAttributesA(build_path) != INVALID_FILE_ATTRIBUTES) {
-        hashCLBuild(build_path, dest, conteudo_path, 0);
-        return 0;
+    if (!path_acessible(build_path)) {
+        printf("Build nao existe.");
+        return -1;
     }
-    printf("Build nao existe.");
-    return -1;
+
+    hashLoadBuild(build_path, dest, conteudo_path);
+    
+    printf("[" COR_OK "%s" RESET "] enviado para [" COR_OK "%s" RESET"]\n", orig, dest);
+    return 0;
 }
 
 
 //visualizacao
 void listRegistros(){
-    WIN32_FIND_DATA fd;
+    DirIt* p = init_dirit(DEST, 0);
 
-    char dirReg[MAX_PATH];
-    snprintf(dirReg, MAX_PATH, "%s\\*", DEST);
+    int count = 0;
+    int r;
+    while(r = path_travel(&p)){
+        if (r == 2) continue;
+       
+        if (!p->is_file){
+            printf("Registro "COR_OK "%s" RESET " ", p->item_name);
 
-    HANDLE hFind = FindFirstFile(dirReg, &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return;
+            char path_salver[MAX_PATH];
+            snprintf(path_salver, MAX_PATH, "%s" PATH_SEP_STR "build" PATH_SEP_STR "salver", p->item_path);
 
-    do {
-        if (strcmp(fd.cFileName, ".") && strcmp(fd.cFileName, "..")){
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-                printf("Registro "BLUE "%s" RESET " -> ", fd.cFileName);
+            char* content;
+            size_t size = 0;
+            FILE* f = fopen(path_salver, "rb");
+            readFile(f, &size, &content);
+            if (f) fclose(f);
 
-                char dirSalver[MAX_PATH];
-                snprintf(dirSalver, MAX_PATH, "%s\\%s\\build\\salver", DEST, fd.cFileName);
-
-                char* content;
-                size_t size = 0;
-                FILE* f = fopen(dirSalver, "rb");
-                readFile(f, &size, &content);
-                fclose(f);
-
-                printf("versão %s\n", content);
-
-            } 
+            printf("v.%s\n", content);
+            count++;
         }
-    } while(FindNextFile(hFind, &fd));
+    }
+    printf("\nRegistros: %d\n", count);
 
-    FindClose(hFind);
 }
 
 //Prog
 void init(){
-    SetConsoleOutputCP(CP_UTF8);
     initSet(&ignore_file_types);
     initSet(&ignore_folders);
 
     snprintf(BUILDER_NAME, BUILDER_NAME_SIZE, "nem deus sabe");
     
     char program_path[MAX_PATH]; 
-    GetModuleFileNameA(NULL, program_path, MAX_PATH);
-    *strrchr(program_path, '\\') = '\0';
+    get_program_path(program_path);
+
+    *strrchr(program_path, PATH_SEP) = '\0';
 
     char config_path[MAX_PATH];
-    snprintf(config_path, MAX_PATH, "%s\\svconfig.txt", program_path);
+    snprintf(config_path, MAX_PATH, "%s" PATH_SEP_STR "svconfig.txt", program_path);
 
     char** svconfig_lines;
     size_t line_count;
@@ -380,8 +393,11 @@ void init(){
             snprintf(BUILDER_NAME, BUILDER_NAME_SIZE, "%s", resto);
         }
     }
-
-    if (createCheckDir(DEST) != 0) msgExit("Falha em criar / achar diretorio destino (primeira linha svconfig)");
+    if (!path_acessible(DEST)){
+        if(!createdir(DEST)){
+            msgExit("Falha em criar / achar diretorio destino (primeira linha svconfig)");
+        }
+    }
 }
 
 int main(int argc, char** argv){
@@ -390,13 +406,14 @@ int main(int argc, char** argv){
 
     init();
 
-    GetCurrentDirectoryA(MAX_PATH, proj_path);
-    snprintf(reg_path, MAX_PATH, "%s\\%s", DEST, argv[argc-1]);
+    get_working_path(proj_path);
+
+    snprintf(reg_path, MAX_PATH, "%s" PATH_SEP_STR "%s", DEST, argv[argc-1]);
     snprintf(REGISTRO_LASTARG, MAX_PATH, "%s", argv[argc-1]);
 
     if (argc == 1){
-        printf(BLUE "salvaguarda " RESET "versão " BLUE "%s " RESET "windows\n", VER);
-        printf("digite '"BLUE "salt -ajuda" RESET"' para saber mais\n\n");
+        printf(COR_OK "salvaguarda " RESET "versão " COR_OK "%s " RESET PROG_OS "\n", VER);
+        printf("digite '"COR_OK "salt -ajuda" RESET"' para saber mais\n\n");
         listRegistros();    
         return 0;
     }    
@@ -419,8 +436,8 @@ int main(int argc, char** argv){
         if ((startsWith(argv[i], "-from") == 1)){
             char new_path[MAX_PATH];
             snprintf(new_path, MAX_PATH, "%s", argv[i]+5);
-            DWORD fa = GetFileAttributes(new_path);
-            if (fa == INVALID_FILE_ATTRIBUTES || ((fa & FILE_ATTRIBUTE_DIRECTORY) == 0)){
+
+            if (!path_acessible(new_path) || !is_folder(new_path)){
                 printf("caminho indevido / inexistente.");
                 return 0;
             }
@@ -429,7 +446,6 @@ int main(int argc, char** argv){
         else if ((startsWith(argv[i], "-msg") == 1)){
             snprintf(BUILDER_MESSAGE, BUILDER_MESSAGE_SIZE, "%s", argv[i]+4);
         }
-
 
         //termina programa
         else if ((startsWith(argv[i], "-new") == 1)){
@@ -440,14 +456,14 @@ int main(int argc, char** argv){
             char build_path[MAX_PATH];
     
             if (argv[i][5] != '\0'){
-                snprintf(build_path, MAX_PATH, "%s\\build\\%s", reg_path, argv[i]+5);
+                snprintf(build_path, MAX_PATH, "%s" PATH_SEP_STR "build" PATH_SEP_STR "%s", reg_path, argv[i]+5);
                 printf("\n");
-                fileTravel(build_path, 1, 1, 1);
+                display_dir(build_path, 1, 1, 1);
                 return 0;
             }
 
-            snprintf(build_path, MAX_PATH, "%s\\build", reg_path, argv[i]+5);
-            fileTravel(build_path, 0, 0 ,1);
+            snprintf(build_path, MAX_PATH, "%s" PATH_SEP_STR "build", reg_path);
+            display_dir(build_path, 0, 0 ,1);
             return 0;
         }
         
